@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>明明上帝・文字遊戲</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 28px 16px;
+    display: flex; justify-content: center; align-items: center;
+    background: radial-gradient(circle at top, #fff7df, #ead9b5 72%);
+    color: #513719; font-family: "Noto Serif TC", "Songti TC", serif;
+  }
+  .card {
+    width: min(100%, 560px); padding: 28px 22px 26px;
+    background: rgba(255,252,242,.94); border: 2px solid #bd9656;
+    border-radius: 22px; box-shadow: 0 14px 36px #65451f26;
+    text-align: center;
+  }
+  h1 { margin: 0 0 8px; font-size: clamp(25px, 6vw, 34px); letter-spacing: .12em; }
+  .sub { margin: 0 0 22px; color: #8a6a3d; font-size: 14px; }
+  .target {
+    margin: 0 auto 18px; padding: 15px 12px; border-radius: 14px;
+    background: #f5ecd8; line-height: 2; letter-spacing: .16em;
+    font-size: clamp(17px, 4.5vw, 21px);
+  }
+  .target strong { color: #9a6827; }
+  .slots {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin: 0 auto 18px;
+  }
+  .slot {
+    min-height: 52px; border: 1px dashed #c4a36d; border-radius: 10px;
+    display: grid; place-items: center; background: #fffdf8;
+    font-size: 25px; color: #69471f;
+  }
+  .slot.filled { border-style: solid; background: #f7efdF; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+  .tile {
+    min-height: 52px; border: 1px solid #b88d4e; border-radius: 11px;
+    background: linear-gradient(#fffdf7, #f1e3c7); color: #5b3b18;
+    font: inherit; font-size: 25px; cursor: pointer;
+    box-shadow: 0 3px 0 #c6a16b; touch-action: manipulation;
+  }
+  .tile:active { transform: translateY(2px); box-shadow: 0 1px 0 #c6a16b; }
+  .tile.used { opacity: .22; cursor: default; box-shadow: none; }
+  .actions { display: flex; gap: 10px; justify-content: center; margin-top: 22px; }
+  .actions button {
+    border: 0; border-radius: 999px; padding: 11px 23px;
+    font: inherit; font-size: 16px; cursor: pointer;
+  }
+  #undo { background: #eee1c8; color: #684b27; }
+  #restart { background: #8d612d; color: white; }
+  #message { min-height: 28px; margin: 17px 0 0; font-size: 16px; color: #8b622e; }
+  #message.success { color: #277344; font-weight: bold; }
+  .hint { color: #9b8667; font-size: 12px; margin: 8px 0 0; }
+  @media (max-width: 380px) {
+    .card { padding: 23px 14px; }
+    .slots, .tiles { gap: 6px; }
+    .slot, .tile { min-height: 46px; }
+  }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>明明上帝</h1>
+  <p class="sub">誠心排列・完成祝文</p>
+  <div class="target">
+    <strong>明明上帝</strong><br>
+    <strong>無量清虛</strong><br>
+    <strong>至尊至聖</strong><br>
+    <strong>三界十方</strong><br>
+    <strong>萬靈真宰</strong>
+  </div>
+  <p>請依照上方順序，逐字點選下方文字：</p>
+  <div class="slots" id="slots" aria-label="排列區"></div>
+  <div class="tiles" id="tiles" aria-label="文字選擇區"></div>
+  <div class="actions">
+    <button id="undo" type="button">返回一步</button>
+    <button id="restart" type="button">重新開始</button>
+  </div>
+  <p id="message" role="status" aria-live="polite">已完成 0 / 20 字</p>
+  <p class="hint">每個字只能使用一次；全部排列正確即可聽見成功音效。</p>
+</main>
+<script>
+(() => {
+  const answer = [..."明明上帝無量清虛至尊至聖三界十方萬靈真宰"];
+  const slotsEl = document.getElementById("slots");
+  const tilesEl = document.getElementById("tiles");
+  const message = document.getElementById("message");
+  let pool = [];
+  let chosen = [];
+
+  function shuffle(items) {
+    const a = [...items];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function render() {
+    slotsEl.innerHTML = "";
+    for (let i = 0; i < answer.length; i++) {
+      const cell = document.createElement("div");
+      cell.className = "slot" + (chosen[i] ? " filled" : "");
+      cell.textContent = chosen[i] ? chosen[i].char : "・";
+      cell.title = chosen[i] ? "點此字可移除" : "等待選字";
+      if (chosen[i]) {
+        cell.style.cursor = "pointer";
+        cell.addEventListener("click", () => {
+          pool[chosen[i].poolIndex].used = false;
+          chosen.splice(i, 1);
+          message.className = "";
+          render();
+        });
+      }
+      slotsEl.appendChild(cell);
+    }
+
+    tilesEl.innerHTML = "";
+    pool.forEach((item, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tile" + (item.used ? " used" : "");
+      button.textContent = item.char;
+      button.disabled = item.used || chosen.length === answer.length;
+      button.setAttribute("aria-label", item.char + (item.used ? "已選取" : ""));
+      button.addEventListener("click", () => {
+        if (item.used || chosen.length >= answer.length) return;
+        item.used = true;
+        chosen.push({ char: item.char, poolIndex: index });
+        message.className = "";
+        if (chosen.length === answer.length) {
+          if (chosen.every((v, i) => v.char === answer[i])) {
+            message.textContent = "排列正確！恭喜完成！";
+            message.className = "success";
+            playSuccess();
+          } else {
+            message.textContent = "再檢查一下順序，點選上方已放入的字可修改。";
+          }
+        } else {
+          message.textContent = `已完成 ${chosen.length} / 20 字`;
+        }
+        render();
+      });
+      tilesEl.appendChild(button);
+    });
+    if (chosen.length < answer.length && !message.classList.contains("success")) {
+      if (chosen.length === 0) message.textContent = "已完成 0 / 20 字";
+    }
+  }
+
+  function playSuccess() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioCtx();
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.19);
+        gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + i * 0.19 + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.19 + 0.42);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.19);
+        osc.stop(ctx.currentTime + i * 0.19 + 0.44);
+      });
+      setTimeout(() => ctx.close(), 1500);
+    } catch (e) {
+      // 若瀏覽器封鎖音效，遊戲仍可正常完成。
+    }
+  }
+
+  document.getElementById("undo").addEventListener("click", () => {
+    if (!chosen.length) return;
+    pool[chosen[chosen.length - 1].poolIndex].used = false;
+    chosen.pop();
+    message.className = "";
+    message.textContent = `已完成 ${chosen.length} / 20 字`;
+    render();
+  });
+
+  document.getElementById("restart").addEventListener("click", start);
+  function start() {
+    pool = shuffle(answer).map(char => ({ char, used: false }));
+    chosen = [];
+    message.className = "";
+    render();
+  }
+  start();
+})();
+</script>
+</body>
+</html>
